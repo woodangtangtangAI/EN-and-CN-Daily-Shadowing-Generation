@@ -3,6 +3,7 @@ import json
 import random
 import datetime
 import asyncio
+import tempfile
 import edge_tts
 from docx import Document
 from google import genai
@@ -12,7 +13,7 @@ from google.genai import types
 # ⚙️ 설정
 # ==========================================
 # GitHub Actions에서는 환경변수로 전달, 로컬에서는 직접 입력
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyC9E9YLhvmp4dwYy94_03yzLt6K4J-0a4U")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # GitHub Actions 환경 여부 감지
 IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
@@ -105,8 +106,10 @@ def upload_to_drive(service, local_path, folder_id, filename):
     media = MediaFileUpload(local_path, resumable=True)
     
     if existing:
+        # 기존 파일 업데이트
         service.files().update(fileId=existing[0]["id"], media_body=media).execute()
     else:
+        # 새 파일 생성
         file_metadata = {"name": filename, "parents": [folder_id]}
         service.files().create(body=file_metadata, media_body=media, fields="id").execute()
     
@@ -132,19 +135,27 @@ def upload_folder_to_drive(service, local_folder, today_folder_name):
 # ==========================================
 def create_docx(data, filename, lang_name, style, topic):
     doc = Document()
+    
+    # 제목
     doc.add_heading(f'🧠 오늘의 {lang_name} 훈련 ({topic} - {style})', 0)
     
+    # 배경지식
     doc.add_heading('배경지식', level=1)
     doc.add_paragraph(data.get('background_kr', ''))
     
+    # 훈련 문장
     doc.add_heading('🎧 청취 훈련 문장', level=1)
     for i, s in enumerate(data.get('sentences', []), 1):
         p = doc.add_paragraph()
         p.add_run(f"{i}. {s.get('original', '')}\n").bold = True
+        
+        # 병음이 있다면 추가 (중국어용)
         if s.get('pinyin'):
             p.add_run(f"   [{s.get('pinyin')}]\n")
+            
         p.add_run(f"   해석: {s.get('translation', '')}")
 
+    # 핵심 단어
     doc.add_heading('📝 핵심 단어', level=1)
     for i, v in enumerate(data.get('vocabulary', []), 1):
         p = doc.add_paragraph()
@@ -154,6 +165,7 @@ def create_docx(data, filename, lang_name, style, topic):
         word_text += f" - {v.get('pos', '')} {v.get('meaning', '')}"
         p.add_run(word_text)
 
+    # 덩어리 표현
     doc.add_heading('🧩 핵심 표현 (Collocations/Idioms)', level=1)
     for i, c in enumerate(data.get('collocations', []), 1):
         p = doc.add_paragraph()
@@ -182,13 +194,11 @@ async def main_async():
     
     # 출력 폴더 결정
     if IS_GITHUB_ACTIONS:
+        # GitHub Actions: 임시 로컬 폴더에 생성 후 Google Drive에 업로드
         base_dir = os.path.join(os.getcwd(), "output")
     else:
+        # 로컬 실행: 기존과 동일하게 스크립트 위치 기준
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # 로컬 실행 시: Github 폴더 밖의 상위 [언어 공부] 폴더에 저장
-        parent_dir = os.path.dirname(base_dir)
-        if os.path.basename(base_dir) == "Github":
-            base_dir = parent_dir
     
     target_folder = os.path.join(base_dir, today_folder_name)
     os.makedirs(target_folder, exist_ok=True)
@@ -249,6 +259,7 @@ async def main_async():
         return
 
     print("✅ 공통 스크립트 생성 완료!")
+    # API 요청 제한 완화를 위해 5초 대기
     await asyncio.sleep(5)
 
     for lang in LANGUAGES:
@@ -312,12 +323,15 @@ async def main_async():
                         response_mime_type="application/json",
                     ),
                 )
+                
+                # 마크다운 잔여물 제거
                 resp_text = response.text.strip()
                 if resp_text.startswith("```json"):
                     resp_text = resp_text[7:]
                 if resp_text.endswith("```"):
                     resp_text = resp_text[:-3]
                 resp_text = resp_text.strip()
+                
                 data = json.loads(resp_text)
                 break
             except Exception as e:
@@ -330,6 +344,7 @@ async def main_async():
         if not data:
             continue
 
+        # 워드 파일 저장
         doc_filename = os.path.join(target_folder, f"{lang['name']}_학습자료.docx")
         try:
             create_docx(data, doc_filename, lang['name'], selected_style, selected_topic)
@@ -337,14 +352,17 @@ async def main_async():
         except Exception as e:
             print(f"❌ 문서 파일 저장 중 오류 발생: {e}")
 
+        # 음성 파일 저장 (대화 형식이므로 남녀 성우 교대로 생성하여 바이너리 병합)
         print(f"🎵 {lang['name']} 음성(TTS) 파일 생성 중 (남녀 듀엣 버전)...")
         audio_filename = os.path.join(target_folder, f"{lang['name']}_학습음성.mp3")
         try:
             temp_files = []
             sentences = [s.get('original', '') for s in data.get('sentences', [])]
+            
             for i, sent_text in enumerate(sentences):
                 selected_voice = lang['voices'][i % 2]
                 temp_fn = f"{audio_filename}_temp_{i}.mp3"
+                
                 communicate = edge_tts.Communicate(sent_text, selected_voice, rate=lang['rate'])
                 await communicate.save(temp_fn)
                 temp_files.append(temp_fn)
@@ -357,10 +375,12 @@ async def main_async():
                         os.remove(temp_fn)
                     except:
                         pass
+                        
             print(f"✅ 듀엣 음성 파일 저장 완료: {audio_filename}")
         except Exception as e:
             print(f"❌ 음성 파일 저장 중 오류 발생: {e}")
             
+        # 다음 언어 API 요청 전 제한 완화를 위해 5초 대기
         await asyncio.sleep(5)
 
     # GitHub Actions 환경이면 Google Drive에 업로드
