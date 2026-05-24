@@ -126,8 +126,8 @@ def upload_to_drive(service, local_path, folder_id, filename):
 
 def upload_folder_to_drive(service, local_folder, today_folder_name):
     """로컬 출력 폴더의 모든 파일을 Google Drive에 업로드"""
-    # [언어 공부] 폴더 찾기 (서비스 계정에 공유된 폴더)
-    parent_id = find_or_create_folder(service, "[언어 공부]")
+    # [언어 공부] 폴더 명시적 ID (사용자 제공)
+    parent_id = "1YmABh3RfKVsqrAVWFelKn2NCtY9ezrCS"
     
     # 오늘 날짜 폴더 찾기/생성
     date_folder_id = find_or_create_folder(service, today_folder_name, parent_id)
