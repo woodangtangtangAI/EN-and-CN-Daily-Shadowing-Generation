@@ -55,19 +55,28 @@ TOPICS = [
 # 📂 Google Drive 업로드 기능 (GitHub Actions 전용)
 # ==========================================
 def get_drive_service():
-    """Google Drive API 서비스 객체 생성 (서비스 계정 인증)"""
-    from google.oauth2 import service_account
+    """Google Drive API 서비스 객체 생성 (OAuth 2.0 사용자 인증)"""
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     
-    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if not sa_json:
-        print("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON 환경변수가 없습니다. 업로드를 건너뜁니다.")
+    creds_json = os.environ.get("GOOGLE_USER_CREDENTIALS")
+    if not creds_json:
+        print("⚠️ GOOGLE_USER_CREDENTIALS 환경변수가 없습니다. 업로드를 건너뜁니다.")
         return None
     
-    sa_info = json.loads(sa_json)
-    credentials = service_account.Credentials.from_service_account_info(
-        sa_info, scopes=["https://www.googleapis.com/auth/drive"]
+    creds_info = json.loads(creds_json)
+    credentials = Credentials.from_authorized_user_info(
+        creds_info, scopes=["https://www.googleapis.com/auth/drive"]
     )
+    
+    # 만약 토큰이 만료되었다면 갱신
+    if credentials.expired and credentials.refresh_token:
+        try:
+            credentials.refresh(Request())
+        except Exception as e:
+            print(f"⚠️ 토큰 갱신 중 오류 발생: {e}")
+            
     return build("drive", "v3", credentials=credentials)
 
 def find_or_create_folder(service, folder_name, parent_id=None):

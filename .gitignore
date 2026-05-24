@@ -1,0 +1,9 @@
+token.json
+credentials_OAuth_DailyShadowing.json
+macro-econ-data-for-countries-*.json
+output/
+__pycache__/
+*.mp3
+*.docx
+*.ini
+get_oauth_token.py
