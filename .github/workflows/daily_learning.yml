@@ -30,4 +30,5 @@ jobs:
         run: python daily_language_learning.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_USER_CREDENTIALS: ${{ secrets.GOOGLE_USER_CREDENTIALS }}

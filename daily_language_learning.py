@@ -60,7 +60,7 @@ def get_drive_service():
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     
-    creds_json = os.environ.get("GOOGLE_USER_CREDENTIALS")
+    creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_USER_CREDENTIALS")
     if not creds_json:
         print("⚠️ GOOGLE_USER_CREDENTIALS 환경변수가 없습니다. 업로드를 건너뜁니다.")
         return None
