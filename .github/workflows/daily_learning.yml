@@ -20,8 +20,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: 📦 pip 업그레이드
+        run: python -m pip install --upgrade pip setuptools wheel
+
       - name: 📦 의존성 설치
-        run: pip install -r requirements.txt
+        run: pip install --no-cache-dir -r requirements.txt
 
       - name: 🧠 학습 자료 생성 및 Google Drive 업로드
         run: python daily_language_learning.py
