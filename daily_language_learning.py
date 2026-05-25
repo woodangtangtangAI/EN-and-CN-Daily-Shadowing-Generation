@@ -248,7 +248,7 @@ async def main_async():
     for attempt in range(3):
         try:
             response = client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-2.0-flash',
                 contents=master_prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
@@ -326,7 +326,7 @@ async def main_async():
             try:
                 print(f"⏳ AI가 글을 작성하고 분석 중입니다... (시도 {attempt+1}/{max_retries})")
                 response = client.models.generate_content(
-                    model='gemini-1.5-flash',
+                    model='gemini-2.0-flash',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
