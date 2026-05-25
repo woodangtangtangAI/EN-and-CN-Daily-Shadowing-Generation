@@ -193,10 +193,10 @@ def create_docx(data, filename, lang_name, style, topic):
 async def main_async():
     client = genai.Client(api_key=GEMINI_API_KEY)
     
-    # KST(한국 시간) 기준 날짜 계산 (UTC+9)
+    # 케냐 시간(EAT) 기준 날짜 계산 (UTC+3)
     import pytz
-    kst = pytz.timezone("Asia/Seoul")
-    now = datetime.datetime.now(kst)
+    local_tz = pytz.timezone("Africa/Nairobi")
+    now = datetime.datetime.now(local_tz)
     weekdays = ["월", "화", "수", "목", "금", "토", "일"]
     weekday_str = weekdays[now.weekday()]
     today_folder_name = f"{now.strftime('%Y%m%d')} ({weekday_str})"
