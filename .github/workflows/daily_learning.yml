@@ -2,8 +2,8 @@ name: Daily Language Learning
 
 on:
   schedule:
-    # 매일 새벽 2시 13분(KST) / 저녁 8시 13분(케냐) = UTC 17:13
-    - cron: '13 17 * * *'
+    # 매일 새벽 1시 13분(케냐) = UTC 22:13
+    - cron: '13 22 * * *'
   workflow_dispatch:
     # GitHub 웹에서 수동 실행 버튼도 제공
 
