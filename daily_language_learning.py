@@ -28,8 +28,9 @@ LANGUAGES = [
         "rate": "+0%",                
         "prompt_extra": (
             "미국식 영어 기준으로 번역 및 작성하며, Chunking(끊어 읽기 표기)은 절대 생략하고 자연스러운 원문과 해석만 제공하세요. "
-            "책에서만 나올 법한 어색하고 인위적인 문장은 피하고, "
-            "실제 네이티브들이 친구나 동료와 대화할 때 쓰는 실전 구어체 표현(Colloquialisms, Idioms, Phrasal verbs)을 적극적으로 활용하세요."
+            "딱딱한 직역 투나 책에서만 나올 법한 어색하고 인위적인 문장은 철저히 배제하세요. "
+            "실제 네이티브들이 동네 친구나 친한 직장 동료와 대화할 때 숨쉬듯 쓰는 '초자연스러운 찐 일상 구어체(Slang, Idioms, Phrasal verbs)'를 적극 활용하세요. "
+            "형식적인 비즈니스 영어보다는 미드나 일상에서 바로 튀어나올 법한 생생한 언어 실력의 뼈대(backbone)가 될 표현들을 지향합니다."
         )
     },
     {
@@ -41,8 +42,8 @@ LANGUAGES = [
         "prompt_extra": (
             "중국어 간체자로 번역 및 작성하며, 모든 중국어 원문과 단어에는 반드시 발음 기호인 병음(Pinyin)을 함께 표기하세요. (Chunking 생략) "
             "교과서나 사전적인 딱딱한 문체(书面语)나 문학적인 성어(成语)는 피하고, "
-            "실제 중국인들이 일상생활이나 메신저, 구두 대화에서 매일 쓰는 초자연스러운 리얼 구어체(口语化) 표현을 사용하세요. "
-            "예를 들어, 격식 차린 표현 대신 '手头的事/活儿', '堆', '忙不过来', '拆分/拆成', '瞎忙/瞎操心', '提效率/效率提一提' 같은 친근하고 자연스러운 단어를 활용하세요."
+            "실제 중국인들이 일상생활이나 메신저(위챗), 친한 동료와의 대화에서 매일 쓰는 '초자연스러운 리얼 구어체(口语化)' 표현을 적극 사용하세요. "
+            "한국식 직역은 절대 피하고, 어설픈 외국인 티를 벗어날 수 있는 네이티브스러운 찐 표현(예: 忙不过来, 瞎操心, 搞定, 吐槽 등)으로 언어 실력의 뼈대(backbone)를 다지게 해주세요."
         )
     }
 ]
@@ -241,11 +242,13 @@ async def main_async():
     - 분량: 가장 핵심이 되는 실전 대화 문장 5개로 구성
     
     [작성 규칙]
-    - 교과서적인 딱딱한 표현 대신, 실제 대화나 구어체(Colloquial)에서 즉시 활용할 수 있는 유용하고 살아있는 표현(구동사, 관용구, 직장인 실무 구어 등)을 자연스럽게 포함해주세요.
+    - 전문적이고 딱딱한 표현은 철저히 배제하세요.
+    - 언어 실력의 뼈대(backbone)를 다질 수 있도록, 원어민들이 매일 숨쉬듯 쓰는 초자연스러운 일상 구어체와 캐주얼한 표현 위주로 작성해주세요. 교과서에 절대 안 나올 법한 리얼한 대화의 뉘앙스를 살리는 것이 핵심입니다.
+    - 이 스크립트는 향후 여러 언어(영어, 중국어 등)로 번역되어 동일한 내용의 실전 회화 자료로 쓰일 예정입니다.
     
-    이 스크립트는 향후 여러 언어(영어, 중국어 등)로 번역되어 동일한 내용의 실전 회화 자료로 쓰일 예정입니다.
-    
-    [중요] 각 문장 앞에는 'A:', 'B:', '이름:' 등 어떠한 화자 표시나 접두사도 붙이지 마세요. 순수한 대사 텍스트만 작성해야 합니다.
+    [🚨초중요 - TTS 음성 합성용🚨]
+    각 문장 앞에는 'A:', 'B:', '이름:', '남:', '여:' 등 **어떠한 화자 표시나 기호도 절대 붙이지 마세요**. (TTS가 이름을 그대로 읽어버리는 치명적인 오류가 발생합니다.) 
+    따옴표도 쓰지 말고 순수한 대사 텍스트만 작성해야 합니다.
     
     응답은 반드시 아래 JSON 형식으로만 작성해주세요.
     {{
@@ -270,11 +273,15 @@ async def main_async():
             if resp_text.endswith("```"):
                 resp_text = resp_text[:-3]
             master_data = json.loads(resp_text.strip())
-            # 화자 접두사 제거 (A:, 이름: 등)
+            # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
             import re
             if "korean_sentences" in master_data:
                 for i, sent in enumerate(master_data["korean_sentences"]):
-                    master_data["korean_sentences"][i] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', sent).strip()
+                    text = sent
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                    master_data["korean_sentences"][i] = text.strip()
             break
         except Exception as e:
             print(f"⚠️ 공통 스크립트 생성 실패 ({attempt+1}/3): {e}")
@@ -307,7 +314,7 @@ async def main_async():
 
         - 추가 요구사항: {lang['prompt_extra']}
 
-        - 중요: 각 문장 앞에는 'A:', 'B:', '이름:' 등 어떠한 화자 표시나 접두사도 붙이지 마세요. 순수한 대사 텍스트만 작성해야 합니다.
+        - [🚨초중요 - TTS 음성 합성용🚨]: 각 문장 앞에는 'A:', 'B:', '이름:', '남:', '여:' 등 어떠한 화자 표시나 접두사도 절대 붙이지 마세요. (TTS가 이름을 읽으면 안 됩니다.) 따옴표 없이 순수한 대사 텍스트만 작성해야 합니다.
 
         (절대로 Chunking(의미 단위 끊어 읽기 표기)은 하지 마세요!)
 
@@ -362,13 +369,21 @@ async def main_async():
                 resp_text = resp_text.strip()
                 
                 data = json.loads(resp_text)
-                # 화자 접두사 제거 (A:, 이름: 등)
+                # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
                 import re
                 for s in data.get('sentences', []):
                     if 'original' in s:
-                        s['original'] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', s['original']).strip()
+                        text = s['original']
+                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                        text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                        s['original'] = text.strip()
                     if 'translation' in s:
-                        s['translation'] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', s['translation']).strip()
+                        text = s['translation']
+                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                        text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                        s['translation'] = text.strip()
                 break
             except Exception as e:
                 print(f"⚠️ {lang['name']} 텍스트 생성 실패 ({attempt+1}/{max_retries}): {e}")
