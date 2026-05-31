@@ -244,6 +244,9 @@ async def main_async():
     - 교과서적인 딱딱한 표현 대신, 실제 대화나 구어체(Colloquial)에서 즉시 활용할 수 있는 유용하고 살아있는 표현(구동사, 관용구, 직장인 실무 구어 등)을 자연스럽게 포함해주세요.
     
     이 스크립트는 향후 여러 언어(영어, 중국어 등)로 번역되어 동일한 내용의 실전 회화 자료로 쓰일 예정입니다.
+    
+    [중요] 각 문장 앞에는 'A:', 'B:', '이름:' 등 어떠한 화자 표시나 접두사도 붙이지 마세요. 순수한 대사 텍스트만 작성해야 합니다.
+    
     응답은 반드시 아래 JSON 형식으로만 작성해주세요.
     {{
       "background_kr": "상황 설명 (한글로 2~3문장)",
@@ -267,6 +270,11 @@ async def main_async():
             if resp_text.endswith("```"):
                 resp_text = resp_text[:-3]
             master_data = json.loads(resp_text.strip())
+            # 화자 접두사 제거 (A:, 이름: 등)
+            import re
+            if "korean_sentences" in master_data:
+                for i, sent in enumerate(master_data["korean_sentences"]):
+                    master_data["korean_sentences"][i] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', sent).strip()
             break
         except Exception as e:
             print(f"⚠️ 공통 스크립트 생성 실패 ({attempt+1}/3): {e}")
@@ -298,6 +306,8 @@ async def main_async():
         - 한국어 문장 5개: {master_data.get('korean_sentences')}
 
         - 추가 요구사항: {lang['prompt_extra']}
+
+        - 중요: 각 문장 앞에는 'A:', 'B:', '이름:' 등 어떠한 화자 표시나 접두사도 붙이지 마세요. 순수한 대사 텍스트만 작성해야 합니다.
 
         (절대로 Chunking(의미 단위 끊어 읽기 표기)은 하지 마세요!)
 
@@ -352,6 +362,13 @@ async def main_async():
                 resp_text = resp_text.strip()
                 
                 data = json.loads(resp_text)
+                # 화자 접두사 제거 (A:, 이름: 등)
+                import re
+                for s in data.get('sentences', []):
+                    if 'original' in s:
+                        s['original'] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', s['original']).strip()
+                    if 'translation' in s:
+                        s['translation'] = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]+[:：]\s*', '', s['translation']).strip()
                 break
             except Exception as e:
                 print(f"⚠️ {lang['name']} 텍스트 생성 실패 ({attempt+1}/{max_retries}): {e}")
