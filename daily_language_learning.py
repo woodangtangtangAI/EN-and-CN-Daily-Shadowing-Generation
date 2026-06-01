@@ -216,7 +216,50 @@ async def robust_generate_content(client, model, contents, config, max_retries=1
             if attempt == max_retries - 1:
                 print(f"❌ 최대 재시도 횟수({max_retries}회)를 초과하여 최종 실패했습니다.")
                 raise e
-             print(f"\n🔄 [다국어 자동화 파이프라인 시작]")
+            
+            # 기본 대기 시간: 시도 횟수에 따라 30초, 60초, 120초 ...
+            wait_time = 30 * (2 ** attempt) 
+            
+            # 429 에러 메시지에 'retry in 33.23s'가 포함되어 있다면 해당 시간 추출
+            retry_match = re.search(r'retry in ([\d\.]+)s', error_msg, re.IGNORECASE)
+            if retry_match:
+                suggested_wait = float(retry_match.group(1))
+                wait_time = max(wait_time, suggested_wait + 5) # 제시된 시간보다 5초 넉넉하게 대기
+            
+            # 최대 대기 시간은 300초(5분)로 제한
+            wait_time = min(wait_time, 300)
+            
+            print(f"⚠️ API 호출 실패 ({attempt+1}/{max_retries}): {error_msg.splitlines()[0]}")
+            print(f"⏳ 트래픽 초과(Free Tier) 또는 서버 부하로 인해 {wait_time:.1f}초 대기 후 재시도합니다...")
+            await asyncio.sleep(wait_time)
+
+
+# ==========================================
+# 🎵 메인 실행
+# ==========================================
+async def main_async():
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    # 케냐 시간(EAT) 기준 날짜 계산 (UTC+3)
+    import pytz
+    local_tz = pytz.timezone("Africa/Nairobi")
+    now = datetime.datetime.now(local_tz)
+    weekdays = ["월", "화", "수", "목", "금", "토", "일"]
+    weekday_str = weekdays[now.weekday()]
+    today_folder_name = f"{now.strftime('%Y%m%d')} ({weekday_str})"
+    
+    # 출력 폴더 결정
+    if IS_GITHUB_ACTIONS:
+        # GitHub Actions: 임시 로컬 폴더에 생성 후 Google Drive에 업로드
+        base_dir = os.path.join(os.getcwd(), "output")
+    else:
+        # 로컬 실행: 기존과 동일하게 스크립트 위치 기준
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    target_folder = os.path.join(base_dir, today_folder_name)
+    os.makedirs(target_folder, exist_ok=True)
+
+    print(f"\n🔄 [다국어 자동화 파이프라인 시작]")
     print(f"👉 오늘 생성 방식: 100% 무한 랜덤 시나리오 (One-Shot 일격필살 생성)")
     if IS_GITHUB_ACTIONS:
         print(f"☁️ GitHub Actions 클라우드 실행 모드")
