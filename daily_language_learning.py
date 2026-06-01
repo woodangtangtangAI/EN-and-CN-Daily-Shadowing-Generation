@@ -193,6 +193,48 @@ def create_docx(data, filename, lang_name):
 
 
 # ==========================================
+# 🛠️ 무적의 API 재시도 (Robust Retry) 로직
+# ==========================================
+async def robust_generate_content(client, model, contents, config, max_retries=10):
+    import re
+    
+    for attempt in range(max_retries):
+        try:
+            # 동기/비동기 혼용 시 발생할 수 있는 문제를 피하기 위해 비동기로 실행
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config
+                )
+            )
+            return response
+        except Exception as e:
+            error_msg = str(e)
+            if attempt == max_retries - 1:
+                print(f"❌ 최대 재시도 횟수({max_retries}회)를 초과하여 최종 실패했습니다.")
+                raise e
+            
+            # 기본 대기 시간: 시도 횟수에 따라 30초, 60초, 120초 ...
+            wait_time = 30 * (2 ** attempt) 
+            
+            # 429 에러 메시지에 'retry in 33.23s'가 포함되어 있다면 해당 시간 추출
+            retry_match = re.search(r'retry in ([\d\.]+)s', error_msg, re.IGNORECASE)
+            if retry_match:
+                suggested_wait = float(retry_match.group(1))
+                wait_time = max(wait_time, suggested_wait + 5) # 제시된 시간보다 5초 넉넉하게 대기
+            
+            # 최대 대기 시간은 300초(5분)로 제한
+            wait_time = min(wait_time, 300)
+            
+            print(f"⚠️ API 호출 실패 ({attempt+1}/{max_retries}): {error_msg.splitlines()[0]}")
+            print(f"⏳ 트래픽 초과(Free Tier) 또는 서버 부하로 인해 {wait_time:.1f}초 대기 후 재시도합니다...")
+            await asyncio.sleep(wait_time)
+
+
+# ==========================================
 # 🎵 메인 실행
 # ==========================================
 async def main_async():
@@ -252,35 +294,31 @@ async def main_async():
     """
     
     master_data = None
-    for attempt in range(3):
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=master_prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
-            resp_text = response.text.strip()
-            if resp_text.startswith("```json"):
-                resp_text = resp_text[7:]
-            if resp_text.endswith("```"):
-                resp_text = resp_text[:-3]
-            master_data = json.loads(resp_text.strip())
-            # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
-            import re
-            if "korean_sentences" in master_data:
-                for i, sent in enumerate(master_data["korean_sentences"]):
-                    text = sent
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                    master_data["korean_sentences"][i] = text.strip()
-            break
-        except Exception as e:
-            print(f"⚠️ 공통 스크립트 생성 실패 ({attempt+1}/3): {e}")
-            await asyncio.sleep(10)
-            
-    if not master_data:
-        print("❌ 공통 스크립트 생성에 실패하여 작업을 종료합니다.")
+    try:
+        response = await robust_generate_content(
+            client=client,
+            model='gemini-2.5-flash',
+            contents=master_prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json")
+        )
+        resp_text = response.text.strip()
+        if resp_text.startswith("```json"):
+            resp_text = resp_text[7:]
+        if resp_text.endswith("```"):
+            resp_text = resp_text[:-3]
+        master_data = json.loads(resp_text.strip())
+        
+        # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
+        import re
+        if "korean_sentences" in master_data:
+            for i, sent in enumerate(master_data["korean_sentences"]):
+                text = sent
+                text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                master_data["korean_sentences"][i] = text.strip()
+    except Exception as e:
+        print(f"❌ 공통 스크립트 생성에 최종 실패하여 작업을 종료합니다: {e}")
         return
 
     print("✅ 공통 스크립트 생성 완료!")
@@ -339,52 +377,43 @@ async def main_async():
         }}
         """
 
-        max_retries = 3
         data = None
-        for attempt in range(max_retries):
-            try:
-                print(f"⏳ AI가 글을 작성하고 분석 중입니다... (시도 {attempt+1}/{max_retries})")
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                    ),
-                )
-                
-                # 마크다운 잔여물 제거
-                resp_text = response.text.strip()
-                if resp_text.startswith("```json"):
-                    resp_text = resp_text[7:]
-                if resp_text.endswith("```"):
-                    resp_text = resp_text[:-3]
-                resp_text = resp_text.strip()
-                
-                data = json.loads(resp_text)
-                # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
-                import re
-                for s in data.get('sentences', []):
-                    if 'original' in s:
-                        text = s['original']
-                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                        text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                        s['original'] = text.strip()
-                    if 'translation' in s:
-                        text = s['translation']
-                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                        text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                        text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                        s['translation'] = text.strip()
-                break
-            except Exception as e:
-                print(f"⚠️ {lang['name']} 텍스트 생성 실패 ({attempt+1}/{max_retries}): {e}")
-                if attempt == max_retries - 1:
-                    print(f"❌ 최대 재시도 횟수 초과. 해당 언어는 건너뜁니다.")
-                else:
-                    await asyncio.sleep(10)
-        
-        if not data:
+        try:
+            print(f"⏳ AI가 글을 작성하고 분석 중입니다...")
+            response = await robust_generate_content(
+                client=client,
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            
+            # 마크다운 잔여물 제거
+            resp_text = response.text.strip()
+            if resp_text.startswith("```json"):
+                resp_text = resp_text[7:]
+            if resp_text.endswith("```"):
+                resp_text = resp_text[:-3]
+            resp_text = resp_text.strip()
+            
+            data = json.loads(resp_text)
+            
+            # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
+            import re
+            for s in data.get('sentences', []):
+                if 'original' in s:
+                    text = s['original']
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                    s['original'] = text.strip()
+                if 'translation' in s:
+                    text = s['translation']
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                    s['translation'] = text.strip()
+        except Exception as e:
+            print(f"❌ {lang['name']} 텍스트 생성 최종 실패. 다음 언어로 넘어갑니다: {e}")
             continue
 
         # 워드 파일 저장
