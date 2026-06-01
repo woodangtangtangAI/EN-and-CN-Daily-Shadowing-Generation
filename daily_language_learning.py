@@ -297,7 +297,7 @@ async def main_async():
     try:
         response = await robust_generate_content(
             client=client,
-            model='gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=master_prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -382,7 +382,7 @@ async def main_async():
             print(f"⏳ AI가 글을 작성하고 분석 중입니다...")
             response = await robust_generate_content(
                 client=client,
-                model='gemini-2.5-flash',
+                model='gemini-1.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
