@@ -1,8 +1,6 @@
 name: Daily Language Learning
 
 on:
-  push:
-    branches: [ "main" ]
   schedule:
     # 매일 새벽 1시 13분(케냐) = UTC 22:13
     - cron: '13 22 * * *'
