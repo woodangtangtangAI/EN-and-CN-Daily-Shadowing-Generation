@@ -153,8 +153,16 @@ def upload_folder_to_drive(service, local_folder, today_folder_name):
 # 📄 문서 생성
 # ==========================================
 def create_docx(data, filename, lang_name, style, topic):
+    from docx.shared import Cm
     doc = Document()
     
+    # MS Word '보통' 여백 설정 (위/아래 2.54cm, 왼쪽/오른쪽 1.91cm)
+    for section in doc.sections:
+        section.top_margin = Cm(2.54)
+        section.bottom_margin = Cm(2.54)
+        section.left_margin = Cm(1.91)
+        section.right_margin = Cm(1.91)
+        
     # 제목
     doc.add_heading(f'🧠 오늘의 {lang_name} 훈련 ({topic} - {style})', 0)
     
