@@ -216,59 +216,15 @@ async def robust_generate_content(client, model, contents, config, max_retries=1
             if attempt == max_retries - 1:
                 print(f"❌ 최대 재시도 횟수({max_retries}회)를 초과하여 최종 실패했습니다.")
                 raise e
-            
-            # 기본 대기 시간: 시도 횟수에 따라 30초, 60초, 120초 ...
-            wait_time = 30 * (2 ** attempt) 
-            
-            # 429 에러 메시지에 'retry in 33.23s'가 포함되어 있다면 해당 시간 추출
-            retry_match = re.search(r'retry in ([\d\.]+)s', error_msg, re.IGNORECASE)
-            if retry_match:
-                suggested_wait = float(retry_match.group(1))
-                wait_time = max(wait_time, suggested_wait + 5) # 제시된 시간보다 5초 넉넉하게 대기
-            
-            # 최대 대기 시간은 300초(5분)로 제한
-            wait_time = min(wait_time, 300)
-            
-            print(f"⚠️ API 호출 실패 ({attempt+1}/{max_retries}): {error_msg.splitlines()[0]}")
-            print(f"⏳ 트래픽 초과(Free Tier) 또는 서버 부하로 인해 {wait_time:.1f}초 대기 후 재시도합니다...")
-            await asyncio.sleep(wait_time)
-
-
-# ==========================================
-# 🎵 메인 실행
-# ==========================================
-async def main_async():
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    
-    # 케냐 시간(EAT) 기준 날짜 계산 (UTC+3)
-    import pytz
-    local_tz = pytz.timezone("Africa/Nairobi")
-    now = datetime.datetime.now(local_tz)
-    weekdays = ["월", "화", "수", "목", "금", "토", "일"]
-    weekday_str = weekdays[now.weekday()]
-    today_folder_name = f"{now.strftime('%Y%m%d')} ({weekday_str})"
-    
-    # 출력 폴더 결정
-    if IS_GITHUB_ACTIONS:
-        # GitHub Actions: 임시 로컬 폴더에 생성 후 Google Drive에 업로드
-        base_dir = os.path.join(os.getcwd(), "output")
-    else:
-        # 로컬 실행: 기존과 동일하게 스크립트 위치 기준
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    target_folder = os.path.join(base_dir, today_folder_name)
-    os.makedirs(target_folder, exist_ok=True)
-
-    print(f"\n🔄 [다국어 자동화 파이프라인 시작]")
-    print(f"👉 오늘 생성 방식: 100% 무한 랜덤 시나리오 (TPO 맞춤형)")
+             print(f"\n🔄 [다국어 자동화 파이프라인 시작]")
+    print(f"👉 오늘 생성 방식: 100% 무한 랜덤 시나리오 (One-Shot 일격필살 생성)")
     if IS_GITHUB_ACTIONS:
         print(f"☁️ GitHub Actions 클라우드 실행 모드")
 
-    # --- 공통 한국어 스크립트 생성 ---
-    print("⏳ 동일한 학습 내용을 위해 공통 한국어 스크립트를 먼저 생성합니다...")
+    print("⏳ 단 한 번의 API 호출로 한국어, 영어, 중국어 학습 스크립트를 동시에 생성합니다...")
     master_prompt = """
     당신은 언어 학습자를 위한 최고의 콘텐츠 크리에이터입니다.
-    오늘은 세상에 존재하는 수만 가지 상황 중 '단 하나'를 완벽하게 무작위로 뽑아 생생한 텍스트를 창작해주세요.
+    오늘은 세상에 존재하는 수만 가지 상황 중 '단 하나'를 완벽하게 무작위로 뽑아 생생한 다국어(한국어, 영어, 중국어) 텍스트를 창작해주세요.
     
     [무한 랜덤 시나리오 설정]
     - 주제: 정치, 경제, 스포츠, IT, 문화, 일상 잡담, 회사 업무, 가족 갈등, 식당 컴플레인, 뉴스 보도 등 세상의 모든 주제 중 랜덤 1개
@@ -277,19 +233,46 @@ async def main_async():
     
     [작성 규칙]
     - 기계적이거나 뻔한 상황(예: "요즘 바빠요", "잘 지내요?")은 절대 피하세요. 매우 구체적이고 흥미진진한 특정 상황을 설정하세요.
-    - 어조와 단어 선택은 설정된 상황(TPO)에 완벽하게 맞추세요. (뉴스면 아주 정제되게, 친구 잡담이면 아주 캐주얼하게)
-    - 이 스크립트는 향후 여러 언어로 번역될 예정입니다.
+    - 한국어 원문은 상황에 완벽히 맞는 톤 앤 매너를 유지하세요.
+    - 영어: 미국식 영어 기준. Chunking(끊어 읽기) 절대 생략. 어설픈 직역체 배제. 가장 자연스럽고 트렌디한 일상 구어(Colloquial) 활용.
+    - 중국어: 중국어 간체자로 번역. 모든 중국어 원문과 중국어 단어에 발음 기호인 병음(Pinyin) 필수 표기. Chunking 절대 생략. 한국식 직역 배제, 네이티브 찐 표현 사용.
     
     [🚨초중요 - TTS 음성 합성용🚨]
-    만약 대화문 형식을 선택했더라도, 각 문장 앞에는 'A:', 'B:', '이름:', '남:', '여:' 등 **어떠한 화자 표시나 기호도 절대 붙이지 마세요**. (TTS가 이름을 그대로 읽어버리는 치명적인 오류가 발생합니다.) 
-    따옴표도 쓰지 말고 순수한 텍스트만 작성해야 합니다.
+    만약 대화문 형식을 선택했더라도, 각 언어별 문장 앞에는 'A:', 'B:', '이름:', '남:', '여:' 등 **어떠한 화자 표시나 기호도 절대 붙이지 마세요**. (TTS가 이름을 그대로 읽어버리는 치명적인 오류가 발생합니다.) 
+    따옴표도 쓰지 말고 순수한 대사 텍스트만 작성해야 합니다.
     
-    응답은 반드시 아래 JSON 형식으로만 작성해주세요.
+    응답은 반드시 아래 JSON 형식으로만 작성해주세요:
     {
       "background_kr": "어떤 상황, 어떤 주제, 어떤 형식인지에 대한 구체적인 배경 설명 (한글로 2~3문장)",
-      "korean_sentences": [
-        "1번째 문장", "2번째 문장", "3번째 문장", "4번째 문장", "5번째 문장"
-      ]
+      "english": {
+        "sentences": [
+          {
+            "original": "영어 번역 원문 1",
+            "translation": "한국어 원문 1"
+          }
+        ],
+        "vocabulary": [
+          {"word": "핵심단어", "pos": "품사", "meaning": "뜻"}
+        ],
+        "collocations": [
+          {"expression": "덩어리 표현", "meaning": "뜻"}
+        ]
+      },
+      "chinese": {
+        "sentences": [
+          {
+            "original": "중국어 번역 원문 1",
+            "pinyin": "병음",
+            "translation": "한국어 원문 1"
+          }
+        ],
+        "vocabulary": [
+          {"word": "핵심단어", "pinyin": "병음", "pos": "품사", "meaning": "뜻"}
+        ],
+        "collocations": [
+          {"expression": "덩어리 표현", "pinyin": "병음", "meaning": "뜻"}
+        ]
+      }
     }
     """
     
@@ -297,7 +280,7 @@ async def main_async():
     try:
         response = await robust_generate_content(
             client=client,
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',
             contents=master_prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -310,111 +293,36 @@ async def main_async():
         
         # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
         import re
-        if "korean_sentences" in master_data:
-            for i, sent in enumerate(master_data["korean_sentences"]):
-                text = sent
-                text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                master_data["korean_sentences"][i] = text.strip()
+        for lang_key in ['english', 'chinese']:
+            if lang_key in master_data and 'sentences' in master_data[lang_key]:
+                for s in master_data[lang_key]['sentences']:
+                    for key in ['original', 'translation']:
+                        if key in s:
+                            text = s[key]
+                            text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
+                            text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
+                            text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
+                            s[key] = text.strip()
     except Exception as e:
-        print(f"❌ 공통 스크립트 생성에 최종 실패하여 작업을 종료합니다: {e}")
+        print(f"❌ 다국어 스크립트 One-Shot 생성에 최종 실패하여 작업을 종료합니다: {e}")
         return
 
-    print("✅ 공통 스크립트 생성 완료!")
-    # API 요청 제한 완화를 위해 5초 대기
-    await asyncio.sleep(5)
+    print("✅ 다국어 스크립트 One-Shot 생성 완료!")
 
     for lang in LANGUAGES:
         print(f"\n=========================================")
-        print(f"▶️ [{lang['name']}] 학습 자료 생성 시작...")
+        print(f"▶️ [{lang['name']}] 파일 생성 시작...")
         
-        prompt = f"""
-        당신은 자율형 AI 학습 자동화 에이전트이자 제2외국어 습득에 특화된 데이터 엔지니어입니다.
-        오늘 생성할 언어는 '{lang['name']}'입니다.
+        # 언어 식별자
+        lang_key = 'english' if lang['name'] == '영어' else 'chinese'
+        data = master_data.get(lang_key)
         
-        아래의 [공통 한국어 스크립트]를 바탕으로 '{lang['name']}' 실전 회화 학습 자료를 생성하세요.
-        번역할 때 가장 중요한 것은 **'네이티브가 실제로 입으로 뱉는 표현(Real Spoken Language)'**인가 하는 점입니다.
-        - 교과서에나 나올 법한 딱딱하고 격식 차린 문체(书面语)나 문어체 문장, 인위적인 직역체는 철저히 배제하세요.
-        - 의미가 일치하더라도 어색하게 직역하지 말고, 그 상황에서 원어민 친구나 직장 동료들이 스스럼없이 주고받는 가장 자연스럽고 트렌디한 일상 구어(Colloquial)로 번역하세요.
-
-        [공통 한국어 스크립트]
-        - 배경지식: {master_data.get('background_kr')}
-        - 한국어 문장 5개: {master_data.get('korean_sentences')}
-
-        - 추가 요구사항: {lang['prompt_extra']}
-
-        - [🚨초중요 - TTS 음성 합성용🚨]: 각 문장 앞에는 'A:', 'B:', '이름:', '남:', '여:' 등 어떠한 화자 표시나 접두사도 절대 붙이지 마세요. (TTS가 이름을 읽으면 안 됩니다.) 따옴표 없이 순수한 대사 텍스트만 작성해야 합니다.
-
-        (절대로 Chunking(의미 단위 끊어 읽기 표기)은 하지 마세요!)
-
-        반드시 아래의 JSON 형식으로만 응답하세요.
-
-        {{
-          "background_kr": "상황 설명 (제공된 배경지식과 동일하게 유지)",
-          "sentences": [
-            {{
-              "original": "제공된 한국어 문장을 {lang['name']}로 번역한 원문",
-              "pinyin": "해당하는 경우 발음 기호(병음 등), 없거나 불필요하면 빈 문자열",
-              "translation": "제공된 한국어 문장 (그대로 유지하거나 조금 더 자연스럽게 다듬은 해석)"
-            }}
-          ],
-          "vocabulary": [
-            {{
-              "word": "핵심 단어",
-              "pinyin": "해당하는 경우 발음 기호(병음 등), 없거나 불필요하면 빈 문자열",
-              "pos": "품사 (예: [명사])",
-              "meaning": "한글 의미"
-            }}
-          ],
-          "collocations": [
-            {{
-              "expression": "덩어리 표현",
-              "pinyin": "해당하는 경우 발음 기호(병음 등), 없거나 불필요하면 빈 문자열",
-              "meaning": "한글 의미"
-            }}
-          ]
-        }}
-        """
-
-        data = None
-        try:
-            print(f"⏳ AI가 글을 작성하고 분석 중입니다...")
-            response = await robust_generate_content(
-                client=client,
-                model='gemini-1.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
-            
-            # 마크다운 잔여물 제거
-            resp_text = response.text.strip()
-            if resp_text.startswith("```json"):
-                resp_text = resp_text[7:]
-            if resp_text.endswith("```"):
-                resp_text = resp_text[:-3]
-            resp_text = resp_text.strip()
-            
-            data = json.loads(resp_text)
-            
-            # 화자 접두사 강력 제거 (A:, 이름:, [A], A말하기: 등)
-            import re
-            for s in data.get('sentences', []):
-                if 'original' in s:
-                    text = s['original']
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                    s['original'] = text.strip()
-                if 'translation' in s:
-                    text = s['translation']
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
-                    text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                    text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
-                    s['translation'] = text.strip()
-        except Exception as e:
-            print(f"❌ {lang['name']} 텍스트 생성 최종 실패. 다음 언어로 넘어갑니다: {e}")
+        if not data:
+            print(f"❌ {lang['name']} 데이터가 JSON 응답에 없습니다. 다음 언어로 넘어갑니다.")
             continue
+            
+        # background_kr은 공통 항목이므로 복사
+        data['background_kr'] = master_data.get('background_kr', '')
 
         # 워드 파일 저장
         doc_filename = os.path.join(target_folder, f"{lang['name']}_학습자료.docx")
@@ -451,9 +359,6 @@ async def main_async():
             print(f"✅ 듀엣 음성 파일 저장 완료: {audio_filename}")
         except Exception as e:
             print(f"❌ 음성 파일 저장 중 오류 발생: {e}")
-            
-        # 다음 언어 API 요청 전 제한 완화를 위해 5초 대기
-        await asyncio.sleep(5)
 
     # GitHub Actions 환경이면 Google Drive에 업로드
     if IS_GITHUB_ACTIONS:
