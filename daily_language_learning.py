@@ -465,7 +465,6 @@ async def main_async():
                             text = s[key]
                             text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[:：]\s*', '', text)
                             text = re.sub(r'^[\(\[][A-Za-z0-9가-힣一-龥\s\-\_]{1,15}[\)\]]\s*', '', text)
-                            text = re.sub(r'^[A-Za-z0-9가-힣一-龥\s\-\_]{1,15}(말하기|가|이|说|says)[:：]?\s*', '', text)
                             # AI가 지시를 무시하고 넣은 끊어읽기 기호(/) 강제 삭제
                             text = text.replace('/', '').replace('//', '')
                             s[key] = text.strip()
