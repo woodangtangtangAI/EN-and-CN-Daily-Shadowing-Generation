@@ -23,8 +23,8 @@ LANGUAGES = [
     {
         "name": "영어",
         "folder": "영어",
-        # 듀엣 대화 효과를 위한 여성, 남성 성우진 지정
-        "voices": ["en-US-JennyNeural", "en-US-GuyNeural"], 
+        # 듀엣 대화 효과를 위한 여성, 남성 성우진 지정 (생동감 있고 또렷한 톤으로 교체)
+        "voices": ["en-US-AriaNeural", "en-US-ChristopherNeural"], 
         "rate": "+0%",                
         "prompt_extra": (
             "미국식 영어 기준으로 번역 및 작성하며, Chunking(끊어 읽기 표기)은 절대 생략하고 자연스러운 원문과 해석만 제공하세요. "
@@ -137,57 +137,178 @@ def upload_folder_to_drive(service, local_folder, today_folder_name):
 
 
 # ==========================================
-# 📄 문서 생성
+# ==========================================
+# 📄 문서 생성 (Premium Styling System)
 # ==========================================
 def create_docx(data, filename, lang_name):
-    from docx.shared import Cm
+    from docx.shared import Pt, RGBColor, Cm, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
     doc = Document()
     
-    # MS Word '보통' 여백 설정 (위/아래 2.54cm, 왼쪽/오른쪽 1.91cm)
+    # Page Margins (top/bottom: 2.54cm, left/right: 1.91cm)
     for section in doc.sections:
         section.top_margin = Cm(2.54)
         section.bottom_margin = Cm(2.54)
         section.left_margin = Cm(1.91)
         section.right_margin = Cm(1.91)
         
-    # 제목
-    doc.add_heading(f'🧠 오늘의 {lang_name} 훈련', 0)
+    # Font choice (Microsoft YaHei for Chinese, Malgun Gothic for others)
+    base_font = 'Microsoft YaHei' if lang_name == '중국어' else 'Malgun Gothic'
     
-    # 배경지식
-    doc.add_heading('배경지식', level=1)
-    doc.add_paragraph(data.get('background_kr', ''))
+    # Document Style
+    style_normal = doc.styles['Normal']
+    font_normal = style_normal.font
+    font_normal.name = base_font
+    font_normal.size = Pt(10)
+    font_normal.color.rgb = RGBColor(38, 38, 38) # Off-black
     
-    # 훈련 문장
-    doc.add_heading('🎧 청취 훈련 문장', level=1)
-    for i, s in enumerate(data.get('sentences', []), 1):
-        p = doc.add_paragraph()
-        p.add_run(f"{i}. {s.get('original', '')}\n").bold = True
+    # 1. Document Title
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.space_before = Pt(12)
+    p_title.paragraph_format.space_after = Pt(18)
+    
+    run_title = p_title.add_run(f'🧠 오늘의 {lang_name} 훈련')
+    run_title.bold = True
+    run_title.font.name = base_font
+    run_title.font.size = Pt(18)
+    run_title.font.color.rgb = RGBColor(31, 78, 121) # Steel Blue
+    
+    # 2. Helper functions for sections
+    def add_section_heading(emoji, text):
+        h = doc.add_paragraph()
+        h.paragraph_format.space_before = Pt(18)
+        h.paragraph_format.space_after = Pt(6)
+        h.paragraph_format.keep_with_next = True
         
-        # 병음이 있다면 추가 (중국어용)
-        if s.get('pinyin'):
-            p.add_run(f"   [{s.get('pinyin')}]\n")
+        run_emoji = h.add_run(f"{emoji} ")
+        run_emoji.font.name = base_font
+        run_emoji.font.size = Pt(12.5)
+        
+        run_text = h.add_run(text)
+        run_text.bold = True
+        run_text.font.name = base_font
+        run_text.font.size = Pt(12.5)
+        run_text.font.color.rgb = RGBColor(31, 78, 121) # Steel Blue
+        
+    # --- BACKGROUND SECTION ---
+    if data.get('background_kr'):
+        add_section_heading("📖", "배경지식")
+        p_bg = doc.add_paragraph()
+        p_bg.paragraph_format.line_spacing = 1.3
+        p_bg.paragraph_format.space_after = Pt(14)
+        run_bg = p_bg.add_run(data['background_kr'])
+        run_bg.font.name = base_font
+        run_bg.font.size = Pt(9.5)
+        run_bg.font.color.rgb = RGBColor(90, 90, 90) # Muted Gray
+        
+    # --- SENTENCES SECTION ---
+    if data.get('sentences'):
+        add_section_heading("🎧", "청취 훈련 문장")
+        
+        for i, s in enumerate(data['sentences'], 1):
+            # Original Sentence Paragraph
+            p_orig = doc.add_paragraph()
+            p_orig.paragraph_format.space_before = Pt(6)
+            p_orig.paragraph_format.space_after = Pt(0)
+            p_orig.paragraph_format.line_spacing = 1.1
             
-        p.add_run(f"   해석: {s.get('translation', '')}")
+            run_num = p_orig.add_run(f"{i}. ")
+            run_num.bold = True
+            run_num.font.name = base_font
+            run_num.font.size = Pt(10.5)
+            run_num.font.color.rgb = RGBColor(31, 78, 121) # Steel Blue
+            
+            run_orig = p_orig.add_run(s.get('original', ''))
+            run_orig.bold = True
+            run_orig.font.name = base_font
+            run_orig.font.size = Pt(10.5)
+            run_orig.font.color.rgb = RGBColor(0, 0, 0) # Black
+            
+            # Pinyin Paragraph (Chinese only)
+            if s.get('pinyin'):
+                p_pinyin = doc.add_paragraph()
+                p_pinyin.paragraph_format.left_indent = Inches(0.25)
+                p_pinyin.paragraph_format.space_after = Pt(0)
+                p_pinyin.paragraph_format.line_spacing = 1.1
+                
+                run_pinyin = p_pinyin.add_run(f"[{s.get('pinyin')}]")
+                run_pinyin.font.name = base_font
+                run_pinyin.font.size = Pt(9)
+                run_pinyin.font.color.rgb = RGBColor(0, 128, 128) # Teal
+                
+            # Translation Paragraph
+            p_trans = doc.add_paragraph()
+            p_trans.paragraph_format.left_indent = Inches(0.25)
+            p_trans.paragraph_format.space_after = Pt(10) # Space between sentences
+            p_trans.paragraph_format.line_spacing = 1.1
+            
+            run_trans = p_trans.add_run(f"해석: {s.get('translation', '')}")
+            run_trans.font.name = base_font
+            run_trans.font.size = Pt(9.5)
+            run_trans.font.color.rgb = RGBColor(80, 80, 80) # Muted text
+            
+    # --- VOCABULARY SECTION ---
+    if data.get('vocabulary'):
+        add_section_heading("📝", "핵심 단어")
+        
+        for i, v in enumerate(data['vocabulary'], 1):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(6)
+            p.paragraph_format.line_spacing = 1.2
+            
+            # Number and Word
+            run_word = p.add_run(f"{i}. {v.get('word', '')}")
+            run_word.bold = True
+            run_word.font.name = base_font
+            run_word.font.size = Pt(10)
+            run_word.font.color.rgb = RGBColor(44, 94, 138) # Medium steel blue
+            
+            # Pinyin
+            if v.get('pinyin'):
+                run_py = p.add_run(f" [{v.get('pinyin')}]")
+                run_py.font.name = base_font
+                run_py.font.size = Pt(9)
+                run_py.font.color.rgb = RGBColor(0, 128, 128) # Teal
+                
+            # Separator & POS & Meaning
+            sep_text = " - "
+            if v.get('pos'):
+                sep_text += f"{v.get('pos')} "
+            run_mean = p.add_run(f"{sep_text}{v.get('meaning', '')}")
+            run_mean.font.name = base_font
+            run_mean.font.size = Pt(9.5)
+            run_mean.font.color.rgb = RGBColor(64, 64, 64) # Dark gray
 
-    # 핵심 단어
-    doc.add_heading('📝 핵심 단어', level=1)
-    for i, v in enumerate(data.get('vocabulary', []), 1):
-        p = doc.add_paragraph()
-        word_text = f"{i}. {v.get('word', '')}"
-        if v.get('pinyin'):
-            word_text += f" [{v.get('pinyin')}]"
-        word_text += f" - {v.get('pos', '')} {v.get('meaning', '')}"
-        p.add_run(word_text)
-
-    # 덩어리 표현
-    doc.add_heading('🧩 핵심 표현 (Collocations/Idioms)', level=1)
-    for i, c in enumerate(data.get('collocations', []), 1):
-        p = doc.add_paragraph()
-        exp_text = f"{i}. {c.get('expression', '')}"
-        if c.get('pinyin'):
-            exp_text += f" [{c.get('pinyin')}]"
-        exp_text += f" - {c.get('meaning', '')}"
-        p.add_run(exp_text)
+    # --- COLLOCATIONS SECTION ---
+    if data.get('collocations'):
+        add_section_heading("🧩", "핵심 표현 (Collocations/Idioms)")
+        
+        for i, c in enumerate(data['collocations'], 1):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(6)
+            p.paragraph_format.line_spacing = 1.2
+            
+            # Number and Expression
+            run_exp = p.add_run(f"{i}. {c.get('expression', '')}")
+            run_exp.bold = True
+            run_exp.font.name = base_font
+            run_exp.font.size = Pt(10)
+            run_exp.font.color.rgb = RGBColor(44, 94, 138)
+            
+            # Pinyin
+            if c.get('pinyin'):
+                run_py = p.add_run(f" [{c.get('pinyin')}]")
+                run_py.font.name = base_font
+                run_py.font.size = Pt(9)
+                run_py.font.color.rgb = RGBColor(0, 128, 128)
+                
+            # Meaning
+            run_mean = p.add_run(f" - {c.get('meaning', '')}")
+            run_mean.font.name = base_font
+            run_mean.font.size = Pt(9.5)
+            run_mean.font.color.rgb = RGBColor(64, 64, 64)
 
     doc.save(filename)
 
@@ -348,6 +469,30 @@ async def main_async():
                             # AI가 지시를 무시하고 넣은 끊어읽기 기호(/) 강제 삭제
                             text = text.replace('/', '').replace('//', '')
                             s[key] = text.strip()
+
+        # pypinyin을 이용한 병음 생성 및 교정
+        from pypinyin import pinyin, Style
+        if 'chinese' in master_data:
+            cd = master_data['chinese']
+            
+            def fix_pinyin(text):
+                if not text: return ""
+                py_list = pinyin(text, style=Style.TONE)
+                return " ".join([item[0] for item in py_list])
+            
+            if 'sentences' in cd:
+                for s in cd['sentences']:
+                    if 'original' in s:
+                        s['pinyin'] = fix_pinyin(s['original'])
+            if 'vocabulary' in cd:
+                for v in cd['vocabulary']:
+                    if 'word' in v:
+                        v['pinyin'] = fix_pinyin(v['word'])
+            if 'collocations' in cd:
+                for c in cd['collocations']:
+                    if 'expression' in c:
+                        c['pinyin'] = fix_pinyin(c['expression'])
+
     except Exception as e:
         print(f"❌ 다국어 스크립트 One-Shot 생성에 최종 실패하여 작업을 종료합니다: {e}")
         return
