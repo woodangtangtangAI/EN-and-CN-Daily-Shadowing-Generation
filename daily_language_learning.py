@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import random
 import datetime
@@ -444,7 +444,7 @@ async def main_async():
     try:
         response = await robust_generate_content(
             client=client,
-            model='gemini-2.5-flash',
+            model='gemini-flash-latest',
             contents=master_prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
